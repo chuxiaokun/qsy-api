@@ -1,0 +1,55 @@
+---
+alwaysApply: true
+description: 小鹅三仓协作（小程序 xiaoe / 管理后台 kunkit-admin / API xiaoe-api）
+---
+
+# 三仓协作开发
+
+本工作区为 **API 服务**；与 **小程序**、**管理后台** 为同级独立仓库，功能常需跨仓联动，请按职责修改对应目录。
+
+## 仓库一览
+
+| 角色 | 路径 | 技术栈 | 主要职责 |
+|------|------|--------|----------|
+| 小程序 | `C:\Users\Administrator\Documents\xiaoe` | 微信小程序 + 云函数 | `pages/`、`utils/`、`cloudfunctions/`；`utils/config.js` 配置 `API_BASE` |
+| API | `C:\Users\Administrator\Documents\xiaoe-api` | Node (Express) | 登录、用户、管理接口；`sql/schema.sql`、`.env` |
+| 管理后台 | `C:\Users\Administrator\Documents\kunkit-admin` | Next.js | 后台页面；`src/lib/admin-api.ts` 调用 API |
+
+## 何时改哪个仓
+
+- **仅小程序 UI/交互、wx 登录调用、历史记录展示** → 只改 `xiaoe`
+- **仍走微信云函数的能力**（如 `parseVideo`）→ 只改 `xiaoe/cloudfunctions/`，不必迁到 API
+- **新增/修改 HTTP 接口、鉴权、数据库表、返回字段** → 先改 `xiaoe-api`，再同步两端前端
+- **后台列表、统计、管理员操作界面** → 改 `kunkit-admin`；若缺接口则同时改 `xiaoe-api`
+
+有需求时 **可直接读取并修改上述三个路径下的文件**，无需用户逐次授权路径。
+
+## 接口与数据约定（三端一致）
+
+- 统一响应：`{ "code": number, "msg"?: string, "data"?: T }`；成功 `code === 200`
+- 小程序登录：`POST /api/login`，body `{ code }`（wx.login 的 code）；与云函数 `login` 返回结构一致
+- 管理端：Bearer / `X-Admin-Token` 或 `X-Admin-Key`（见 `xiaoe-api` 与 `kunkit-admin` 现有实现）
+- 改接口时：**同时检查** `xiaoe/utils/auth.js`、`kunkit-admin/src/lib/admin-api.ts`、`xiaoe-api/src/routes/`
+
+## 关键配置（改接口或联调时核对）
+
+| 项目 | 配置项 |
+|------|--------|
+| xiaoe | `utils/config.js` → `API_BASE`、`CLOUD_ENV` |
+| xiaoe-api | `.env`（微信、MySQL、JWT 等）；说明见 `xiaoe-api/README.md` |
+| kunkit-admin | `ADMIN_API_BASE`、`ADMIN_API_KEY`（`.env.local`） |
+
+线上 API 默认域名：`https://kit.baimengyan.cn`（本地调试可改为本机 `xiaoe-api` 地址）。
+
+## 协作流程
+
+1. 先判断改动落在哪一层（小程序 / API / 后台）
+2. 涉及 API 时，先读 `xiaoe-api/src/routes/` 与 `sql/schema.sql`，再改前端
+3. 保持改动范围最小；匹配各仓已有代码风格与目录结构
+4. 跨仓功能在回复中 **简要列出已改仓库与文件**，便于用户分别提交
+
+## 注意
+
+- 三仓 **各自独立 Git**，不要假设一次 commit 覆盖全部
+- 不要提交 `.env`、`.env.local` 等密钥文件
+- `xiaoe/BACKEND.md` 仅作入口说明；API 细节以 `xiaoe-api` 仓库为准
