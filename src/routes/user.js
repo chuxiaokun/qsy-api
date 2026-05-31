@@ -5,10 +5,48 @@ const multer = require("multer")
 const { requireAuth } = require("../middleware/auth")
 const { mailConfigured } = require("../mail")
 const { createAndSendCode, verifyAndBind } = require("../emailBind")
-const { updateUserProfile, toClientUser, withPublicAvatarUrl } = require("../users")
+const { getUserByOpenid, updateUserProfile, toClientUser, withPublicAvatarUrl } = require("../users")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
+const { getEntitlementByOpenid, grantDailyAdUnlockByOpenid } = require("../entitlement")
 
 const router = express.Router()
+
+/** GET /api/user/me — 当前登录用户资料（含 VIP） */
+router.get("/me", requireAuth, async (req, res) => {
+  try {
+    const row = await getUserByOpenid(req.openid)
+    if (!row) {
+      return res.status(404).json({ code: 404, msg: "用户不存在" })
+    }
+    const user = withPublicAvatarUrl(getPublicBaseUrl(req), toClientUser(row, req.openid))
+    return res.json({ code: 200, data: { user } })
+  } catch (err) {
+    console.error("[user/me]", err.message || err)
+    return res.status(500).json({ code: 500, msg: err.message || "获取用户信息失败" })
+  }
+})
+
+/** GET /api/user/entitlement */
+router.get("/entitlement", requireAuth, async (req, res) => {
+  try {
+    const data = await getEntitlementByOpenid(req.openid)
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[user/entitlement]", err.message || err)
+    return res.status(500).json({ code: 500, msg: err.message || "获取权限失败" })
+  }
+})
+
+/** POST /api/user/ad-unlock — 激励广告看完后上报 */
+router.post("/ad-unlock", requireAuth, async (req, res) => {
+  try {
+    const data = await grantDailyAdUnlockByOpenid(req.openid)
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[user/ad-unlock]", err.message || err)
+    return res.status(500).json({ code: 500, msg: err.message || "解锁失败" })
+  }
+})
 
 const AVATAR_DIR = path.join(__dirname, "../../uploads/avatars")
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024

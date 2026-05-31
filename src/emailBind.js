@@ -17,7 +17,7 @@ function generateCode() {
 async function getUserByOpenid(openid) {
   const pool = getPool()
   const [rows] = await pool.query(
-    "SELECT id, openid, public_id, nickname, avatar_url, email, email_verified FROM users WHERE openid = ? LIMIT 1",
+    "SELECT id, openid, public_id, nickname, avatar_url, email, email_verified, vip_expire_at FROM users WHERE openid = ? LIMIT 1",
     [openid]
   )
   return rows[0] || null

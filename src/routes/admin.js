@@ -2,7 +2,10 @@ const express = require("express")
 const jwt = require("jsonwebtoken")
 const { requireAdmin } = require("../middleware/requireAdmin")
 const { listUsers, getAdminStats, withPublicAvatarUrl } = require("../users")
+const { setUserVipById } = require("../entitlement")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
+const parseRecords = require("../parseRecords")
+const { proxyVideoStream } = require("../videoProxy")
 
 const router = express.Router()
 
@@ -43,15 +46,19 @@ router.get("/me", (req, res) => {
   })
 })
 
-/** GET /api/admin/users?limit=200 */
+/** GET /api/admin/users?limit=200&offset=0 */
 router.get("/users", async (req, res) => {
   try {
     const base = getPublicBaseUrl(req)
-    const users = (await listUsers(req.query.limit)).map((u) => {
+    const { users, total } = await listUsers({
+      limit: req.query.limit,
+      offset: req.query.offset
+    })
+    const mapped = users.map((u) => {
       const patched = withPublicAvatarUrl(base, { avatarUrl: u.avatarUrl })
       return { ...u, avatarUrl: patched.avatarUrl }
     })
-    return res.json({ code: 200, data: { users, total: users.length } })
+    return res.json({ code: 200, data: { users: mapped, total } })
   } catch (err) {
     console.error("[admin/users]", err)
     return res.status(500).json({ code: 500, msg: "获取用户列表失败" })
@@ -62,19 +69,88 @@ router.get("/users", async (req, res) => {
 router.get("/stats", async (req, res) => {
   try {
     const stats = await getAdminStats()
+    const parseStats = await parseRecords.getParseStats()
     return res.json({
       code: 200,
       data: {
         totalUsers: stats.totalUsers,
         todayNewUsers: stats.todayNewUsers,
-        todayParses: 0,
-        successRate: 0,
+        todayParses: parseStats.todayParses,
+        successRate: parseStats.successRate,
         activePlatforms: 6
       }
     })
   } catch (err) {
     console.error("[admin/stats]", err)
     return res.status(500).json({ code: 500, msg: "获取统计失败" })
+  }
+})
+
+/** GET /api/admin/parse-records/:id/video — 代理播放（绕过 CDN Referer 限制） */
+router.get("/parse-records/:id/video", async (req, res) => {
+  try {
+    const videoUrl = await parseRecords.getVideoUrlByRecordId(req.params.id)
+    if (!videoUrl) {
+      return res.status(404).json({ code: 404, msg: "该记录无视频地址" })
+    }
+    await proxyVideoStream(videoUrl, res)
+  } catch (err) {
+    console.error("[admin/parse-records/video]", err)
+    if (!res.headersSent) {
+      res.status(500).json({ code: 500, msg: "视频代理失败" })
+    }
+  }
+})
+
+/** PATCH /api/admin/users/:id/vip  Body: { isVip: boolean } */
+router.patch("/users/:id/vip", async (req, res) => {
+  const userId = String(req.params.id || "").trim()
+  if (!userId || !/^\d+$/.test(userId)) {
+    return res.status(400).json({ code: 400, msg: "无效的用户 ID" })
+  }
+  const isVip = !!(req.body && req.body.isVip)
+  try {
+    const row = await setUserVipById(userId, isVip)
+    const base = getPublicBaseUrl(req)
+    const user = withPublicAvatarUrl(base, {
+      id: String(row.id),
+      publicId: row.public_id,
+      nickname: row.nickname,
+      openId: row.openid,
+      avatarUrl: row.avatar_url || "",
+      email: row.email || "",
+      emailVerified: !!row.email_verified,
+      isVip: !!isVip,
+      vipExpireAt: isVip ? row.vip_expire_at : null,
+      parseCount: 0,
+      createdAt: row.created_at,
+      lastLoginAt: row.last_login_at
+    })
+    return res.json({
+      code: 200,
+      data: { user },
+      msg: isVip ? "已开通 VIP" : "已取消 VIP"
+    })
+  } catch (err) {
+    const msg = err.message || "更新失败"
+    const status = msg === "用户不存在" ? 404 : 500
+    if (status >= 500) console.error("[admin/users/vip]", err)
+    return res.status(status).json({ code: status, msg })
+  }
+})
+
+/** GET /api/admin/parse-records?limit=200&offset=0&q= */
+router.get("/parse-records", async (req, res) => {
+  try {
+    const data = await parseRecords.listRecordsForAdmin({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      q: req.query.q
+    })
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[admin/parse-records]", err)
+    return res.status(500).json({ code: 500, msg: "获取解析记录失败" })
   }
 })
 

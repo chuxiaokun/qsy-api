@@ -1,4 +1,9 @@
 const { getPool } = require("./db")
+const { getParseCountsByOpenids } = require("./parseRecords")
+const { isVipActive, formatVipExpireAt } = require("./entitlement")
+
+const USER_SELECT_FIELDS =
+  "id, openid, public_id, nickname, avatar_url, email, email_verified, vip_expire_at"
 
 const COUNTER_ID = "user_public_id"
 const PUBLIC_ID_START = 10001
@@ -34,7 +39,7 @@ async function findOrCreateUser(openid) {
     await conn.beginTransaction()
 
     const [existing] = await conn.query(
-      "SELECT id, openid, public_id, nickname, avatar_url, email, email_verified FROM users WHERE openid = ? LIMIT 1",
+      `SELECT ${USER_SELECT_FIELDS} FROM users WHERE openid = ? LIMIT 1`,
       [openid]
     )
 
@@ -73,6 +78,7 @@ async function findOrCreateUser(openid) {
 }
 
 function toClientUser(row, openid) {
+  const vipExpireAt = formatVipExpireAt(row.vip_expire_at)
   return {
     id: String(row.id),
     openid,
@@ -81,6 +87,8 @@ function toClientUser(row, openid) {
     avatarUrl: row.avatar_url || "",
     email: row.email || "",
     emailVerified: !!row.email_verified,
+    vipExpireAt,
+    isVip: isVipActive(row.vip_expire_at),
     isGuest: false
   }
 }
@@ -109,31 +117,50 @@ function maskOpenId(openid) {
   return `${openid.slice(0, 4)}***${openid.slice(-4)}`
 }
 
-async function listUsers(limit = 200) {
+async function listUsers({ limit = 200, offset = 0 } = {}) {
   const pool = getPool()
   const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 500)
+  const safeOffset = Math.max(Number(offset) || 0, 0)
   const [rows] = await pool.query(
-    `SELECT id, openid, public_id, nickname, avatar_url, email, email_verified, created_at, last_login_at
-     FROM users ORDER BY id DESC LIMIT ?`,
-    [safeLimit]
+    `SELECT id, openid, public_id, nickname, avatar_url, email, email_verified, vip_expire_at, created_at, last_login_at
+     FROM users ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [safeLimit, safeOffset]
   )
-  return rows.map((row) => ({
-    id: String(row.id),
-    publicId: row.public_id,
-    nickname: row.nickname || buildNickname(row.public_id),
-    openId: maskOpenId(row.openid),
-    avatarUrl: row.avatar_url || "",
-    email: row.email || "",
-    emailVerified: !!row.email_verified,
-    createdAt: row.created_at,
-    lastLoginAt: row.last_login_at
-  }))
+  const [[countRow]] = await pool.query("SELECT COUNT(*) AS total FROM users")
+  const parseCounts = await getParseCountsByOpenids(rows.map((row) => row.openid))
+  return {
+    total: Number(countRow.total) || 0,
+    users: rows.map((row) => ({
+      id: String(row.id),
+      publicId: row.public_id,
+      nickname: row.nickname || buildNickname(row.public_id),
+      openId: maskOpenId(row.openid),
+      avatarUrl: row.avatar_url || "",
+      email: row.email || "",
+      emailVerified: !!row.email_verified,
+      isVip: isVipActive(row.vip_expire_at),
+      vipExpireAt: formatVipExpireAt(row.vip_expire_at),
+      parseCount: parseCounts[row.openid] || 0,
+      createdAt: row.created_at,
+      lastLoginAt: row.last_login_at
+    }))
+  }
+}
+
+async function getUserByOpenid(openid) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT ${USER_SELECT_FIELDS} FROM users WHERE openid = ? LIMIT 1`,
+    [openid]
+  )
+  if (!rows.length) return null
+  return rows[0]
 }
 
 async function updateUserProfile(openid, { nickname, avatarPath }) {
   const pool = getPool()
   const [existing] = await pool.query(
-    "SELECT id, openid, public_id, nickname, avatar_url, email, email_verified FROM users WHERE openid = ? LIMIT 1",
+    `SELECT ${USER_SELECT_FIELDS} FROM users WHERE openid = ? LIMIT 1`,
     [openid]
   )
   if (!existing.length) {
@@ -176,6 +203,7 @@ async function getAdminStats() {
 
 module.exports = {
   findOrCreateUser,
+  getUserByOpenid,
   toClientUser,
   withPublicAvatarUrl,
   buildNickname,
