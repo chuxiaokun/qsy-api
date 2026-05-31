@@ -39,6 +39,13 @@ npm run dev
 
 完善资料（需登录）：`POST https://你的域名/api/user/profile`，`multipart/form-data` 字段 `avatar`（图片）、`nickname`；Header：`Authorization: Bearer <token>`
 
+绑定邮箱（需登录）：
+
+- `POST /api/user/email/send-code`，Body：`{ "email": "user@example.com" }`
+- `POST /api/user/email/bind`，Body：`{ "email": "...", "code": "123456" }`
+
+需在 `.env` 配置阿里云邮件推送 SMTP，并执行 `sql/email_codes.sql` 建表。
+
 ## 接口约定
 
 与云函数 `login` 返回格式一致：

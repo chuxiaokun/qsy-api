@@ -17,8 +17,9 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     ts: Date.now(),
-    features: ["login", "admin", "user-profile"],
-    adminConfigured: !!process.env.ADMIN_API_KEY
+    features: ["login", "admin", "user-profile", "email-bind"],
+    adminConfigured: !!process.env.ADMIN_API_KEY,
+    mailConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   })
 })
 
