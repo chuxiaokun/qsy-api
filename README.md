@@ -44,6 +44,11 @@ npm run dev
 - `POST /api/user/email/send-code`，Body：`{ "email": "user@example.com" }`
 - `POST /api/user/email/bind`，Body：`{ "email": "...", "code": "123456" }`
 
+小程序版本（后台配置）：
+
+- `GET /api/app/version` — 小程序拉取展示文案（无需登录）
+- `GET /api/admin/app-version`、`PUT /api/admin/app-version` — 管理端读写，Body：`{ "version": "1.2.0" }`
+
 需在 `.env` 配置阿里云邮件推送 SMTP，并执行 `sql/email_codes.sql` 建表。
 
 ## 接口约定

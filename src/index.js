@@ -7,6 +7,7 @@ const adminRouter = require("./routes/admin")
 const userRouter = require("./routes/user")
 const parseRecordsRouter = require("./routes/parseRecords")
 const notificationsRouter = require("./routes/notifications")
+const appRouter = require("./routes/app")
 
 const app = express()
 const port = Number(process.env.PORT || 3000)
@@ -27,7 +28,8 @@ app.get("/health", (_req, res) => {
       "parse-records",
       "vip",
       "ad-unlock",
-      "notifications"
+      "notifications",
+      "app-version"
     ],
     adminConfigured: !!process.env.ADMIN_API_KEY,
     mailConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -39,6 +41,7 @@ app.use("/api/user", userRouter)
 app.use("/api/user/parse-records", parseRecordsRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/notifications", notificationsRouter)
+app.use("/api/app", appRouter)
 
 app.use((_req, res) => {
   res.status(404).json({ code: 404, msg: "接口不存在" })

@@ -6,6 +6,7 @@ const { setUserVipById } = require("../entitlement")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
 const parseRecords = require("../parseRecords")
 const notifications = require("../notifications")
+const appSettings = require("../appSettings")
 const { proxyVideoStream } = require("../videoProxy")
 
 const router = express.Router()
@@ -136,6 +137,30 @@ router.patch("/users/:id/vip", async (req, res) => {
     const msg = err.message || "更新失败"
     const status = msg === "用户不存在" ? 404 : 500
     if (status >= 500) console.error("[admin/users/vip]", err)
+    return res.status(status).json({ code: status, msg })
+  }
+})
+
+/** GET /api/admin/app-version */
+router.get("/app-version", async (_req, res) => {
+  try {
+    const data = await appSettings.getMiniProgramVersion()
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[admin/app-version GET]", err)
+    return res.status(500).json({ code: 500, msg: "获取版本配置失败" })
+  }
+})
+
+/** PUT /api/admin/app-version  Body: { version: "1.2.0" } */
+router.put("/app-version", async (req, res) => {
+  try {
+    const data = await appSettings.setMiniProgramVersion(req.body && req.body.version)
+    return res.json({ code: 200, data, msg: "已保存" })
+  } catch (err) {
+    const msg = err.message || "保存失败"
+    const status = /格式无效/.test(msg) ? 400 : 500
+    if (status >= 500) console.error("[admin/app-version PUT]", err)
     return res.status(status).json({ code: status, msg })
   }
 })
