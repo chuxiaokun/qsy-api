@@ -5,6 +5,7 @@ const { listUsers, getAdminStats, withPublicAvatarUrl } = require("../users")
 const { setUserVipById } = require("../entitlement")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
 const parseRecords = require("../parseRecords")
+const notifications = require("../notifications")
 const { proxyVideoStream } = require("../videoProxy")
 
 const router = express.Router()
@@ -136,6 +137,63 @@ router.patch("/users/:id/vip", async (req, res) => {
     const status = msg === "用户不存在" ? 404 : 500
     if (status >= 500) console.error("[admin/users/vip]", err)
     return res.status(status).json({ code: status, msg })
+  }
+})
+
+/** GET /api/admin/notifications */
+router.get("/notifications", async (_req, res) => {
+  try {
+    const items = await notifications.listAll()
+    return res.json({ code: 200, data: { notifications: items } })
+  } catch (err) {
+    console.error("[admin/notifications]", err)
+    return res.status(500).json({ code: 500, msg: "获取通知列表失败" })
+  }
+})
+
+/** POST /api/admin/notifications */
+router.post("/notifications", async (req, res) => {
+  try {
+    const item = await notifications.create(req.body || {})
+    return res.json({ code: 200, data: { notification: item }, msg: "已创建" })
+  } catch (err) {
+    const msg = err.message || "创建失败"
+    const status = /不能为空|格式无效/.test(msg) ? 400 : 500
+    if (status >= 500) console.error("[admin/notifications POST]", err)
+    return res.status(status).json({ code: status, msg })
+  }
+})
+
+/** PUT /api/admin/notifications/:id */
+router.put("/notifications/:id", async (req, res) => {
+  const id = String(req.params.id || "").trim()
+  if (!id || !/^\d+$/.test(id)) {
+    return res.status(400).json({ code: 400, msg: "无效的通知 ID" })
+  }
+  try {
+    const item = await notifications.update(id, req.body || {})
+    return res.json({ code: 200, data: { notification: item }, msg: "已更新" })
+  } catch (err) {
+    const msg = err.message || "更新失败"
+    const status = msg === "通知不存在" ? 404 : /不能为空|格式无效/.test(msg) ? 400 : 500
+    if (status >= 500) console.error("[admin/notifications PUT]", err)
+    return res.status(status).json({ code: status, msg })
+  }
+})
+
+/** DELETE /api/admin/notifications/:id */
+router.delete("/notifications/:id", async (req, res) => {
+  const id = String(req.params.id || "").trim()
+  if (!id || !/^\d+$/.test(id)) {
+    return res.status(400).json({ code: 400, msg: "无效的通知 ID" })
+  }
+  try {
+    const ok = await notifications.remove(id)
+    if (!ok) return res.status(404).json({ code: 404, msg: "通知不存在" })
+    return res.json({ code: 200, msg: "已删除" })
+  } catch (err) {
+    console.error("[admin/notifications DELETE]", err)
+    return res.status(500).json({ code: 500, msg: "删除失败" })
   }
 })
 
