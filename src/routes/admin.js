@@ -7,6 +7,8 @@ const { getPublicBaseUrl } = require("../publicBaseUrl")
 const parseRecords = require("../parseRecords")
 const notifications = require("../notifications")
 const appSettings = require("../appSettings")
+const favorites = require("../favorites")
+const feedback = require("../feedback")
 const { proxyVideoStream } = require("../videoProxy")
 
 const router = express.Router()
@@ -234,6 +236,55 @@ router.get("/parse-records", async (req, res) => {
   } catch (err) {
     console.error("[admin/parse-records]", err)
     return res.status(500).json({ code: 500, msg: "获取解析记录失败" })
+  }
+})
+
+/** GET /api/admin/favorites?limit=200&offset=0&q= */
+router.get("/favorites", async (req, res) => {
+  try {
+    const data = await favorites.listForAdmin({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      q: req.query.q
+    })
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[admin/favorites]", err)
+    return res.status(500).json({ code: 500, msg: "获取收藏失败" })
+  }
+})
+
+/** GET /api/admin/feedback?limit=200&offset=0&q=&status= */
+router.get("/feedback", async (req, res) => {
+  try {
+    const data = await feedback.listForAdmin({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      q: req.query.q,
+      status: req.query.status
+    })
+    return res.json({ code: 200, data })
+  } catch (err) {
+    console.error("[admin/feedback]", err)
+    return res.status(500).json({ code: 500, msg: "获取反馈失败" })
+  }
+})
+
+/** PUT /api/admin/feedback/:id  Body: { status?, reply? } */
+router.put("/feedback/:id", async (req, res) => {
+  const id = String(req.params.id || "").trim()
+  if (!id || !/^\d+$/.test(id)) {
+    return res.status(400).json({ code: 400, msg: "无效的反馈 ID" })
+  }
+  try {
+    const item = await feedback.updateForAdmin(id, req.body || {})
+    return res.json({ code: 200, data: { feedback: item }, msg: "已更新" })
+  } catch (err) {
+    const msg = err.message || "更新失败"
+    const status =
+      msg === "反馈不存在" ? 404 : /无效|没有可更新|过长/.test(msg) ? 400 : 500
+    if (status >= 500) console.error("[admin/feedback PUT]", err)
+    return res.status(status).json({ code: status, msg })
   }
 })
 

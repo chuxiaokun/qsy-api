@@ -7,7 +7,11 @@ const adminRouter = require("./routes/admin")
 const userRouter = require("./routes/user")
 const parseRecordsRouter = require("./routes/parseRecords")
 const notificationsRouter = require("./routes/notifications")
+const userNotificationsRouter = require("./routes/userNotifications")
+const favoritesRouter = require("./routes/favorites")
+const feedbackRouter = require("./routes/feedback")
 const appRouter = require("./routes/app")
+const toolsRouter = require("./routes/tools")
 
 const app = express()
 const port = Number(process.env.PORT || 3000)
@@ -15,6 +19,11 @@ const port = Number(process.env.PORT || 3000)
 app.set("trust proxy", 1)
 app.use(express.json({ limit: "1mb" }))
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")))
+// Ensure clients decode Chinese correctly (some stacks ignore defaults).
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8")
+  next()
+})
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -29,7 +38,11 @@ app.get("/health", (_req, res) => {
       "vip",
       "ad-unlock",
       "notifications",
-      "app-version"
+      "app-version",
+      "video-to-gif",
+      "favorites",
+      "feedback",
+      "user-notification-reads"
     ],
     adminConfigured: !!process.env.ADMIN_API_KEY,
     mailConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -39,9 +52,13 @@ app.get("/health", (_req, res) => {
 app.use("/api/login", loginRouter)
 app.use("/api/user", userRouter)
 app.use("/api/user/parse-records", parseRecordsRouter)
+app.use("/api/user/notifications", userNotificationsRouter)
+app.use("/api/user/favorites", favoritesRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/notifications", notificationsRouter)
+app.use("/api/feedback", feedbackRouter)
 app.use("/api/app", appRouter)
+app.use("/api/tools", toolsRouter)
 
 app.use((_req, res) => {
   res.status(404).json({ code: 404, msg: "接口不存在" })

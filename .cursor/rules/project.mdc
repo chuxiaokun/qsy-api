@@ -11,7 +11,7 @@ description: 小鹅三仓协作（小程序 xiaoe / 管理后台 kunkit-admin / 
 
 | 角色 | 路径（Windows / macOS） | 技术栈 | 主要职责 |
 |------|-------------------------|--------|----------|
-| 小程序 | `C:\Users\Administrator\Documents\xiaoe` / `/Users/ssyb/kunkit/qsy` | 微信小程序 + 云函数 | `pages/`、`utils/`、`cloudfunctions/`；`utils/config.js` 配置 `API_BASE` |
+| 小程序 | `C:\Users\Administrator\Documents\xiaoe` / `/Users/ssyb/Documents/qsy` | 微信小程序 + 云函数 | `pages/`、`utils/`、`cloudfunctions/`；`utils/config.js` 配置 `API_BASE` |
 | API | `C:\Users\Administrator\Documents\xiaoe-api` / `/Users/ssyb/kunkit/qsy-api` | Node (Express) | 登录、用户、管理接口；`sql/schema.sql`、`.env` |
 | 管理后台 | `C:\Users\Administrator\Documents\kunkit-admin` / `/Users/ssyb/kunkit/qsy-admin` | Next.js | 后台页面；`src/lib/admin-api.ts` 调用 API |
 
