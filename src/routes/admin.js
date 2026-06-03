@@ -74,6 +74,11 @@ router.get("/stats", async (req, res) => {
   try {
     const stats = await getAdminStats()
     const parseStats = await parseRecords.getParseStats()
+    const [parseTrend, platformDistribution] = await Promise.all([
+      parseRecords.getParseTrendDays(7),
+      parseRecords.getPlatformDistribution()
+    ])
+    const activePlatforms = platformDistribution.filter((item) => item.value > 0).length
     return res.json({
       code: 200,
       data: {
@@ -81,7 +86,9 @@ router.get("/stats", async (req, res) => {
         todayNewUsers: stats.todayNewUsers,
         todayParses: parseStats.todayParses,
         successRate: parseStats.successRate,
-        activePlatforms: 6
+        activePlatforms: activePlatforms || 6,
+        parseTrend,
+        platformDistribution
       }
     })
   } catch (err) {

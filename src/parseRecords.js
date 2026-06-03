@@ -227,6 +227,69 @@ async function getParseStats() {
   }
 }
 
+function formatDayKey(date) {
+  const pad = (n) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function formatDayLabel(date) {
+  const pad = (n) => String(n).padStart(2, "0")
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** 近 N 日每日解析量（含今天，缺日补 0） */
+async function getParseTrendDays(days = 7) {
+  const pool = getPool()
+  const safeDays = Math.min(Math.max(Number(days) || 7, 1), 30)
+  const [rows] = await pool.query(
+    `SELECT DATE(created_at) AS day, COUNT(*) AS count
+     FROM parse_records
+     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     GROUP BY DATE(created_at)
+     ORDER BY day`,
+    [safeDays - 1]
+  )
+
+  const countByDay = {}
+  rows.forEach((row) => {
+    const day = row.day instanceof Date ? row.day : new Date(row.day)
+    if (Number.isNaN(day.getTime())) return
+    countByDay[formatDayKey(day)] = Number(row.count) || 0
+  })
+
+  const trend = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  for (let i = safeDays - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    trend.push({
+      date: formatDayLabel(d),
+      count: countByDay[formatDayKey(d)] || 0
+    })
+  }
+  return trend
+}
+
+/** 各平台解析占比（百分比，四舍五入） */
+async function getPlatformDistribution() {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT COALESCE(NULLIF(platform, ''), '其他') AS name, COUNT(*) AS count
+     FROM parse_records
+     GROUP BY name
+     ORDER BY count DESC`
+  )
+  const total = rows.reduce((sum, row) => sum + (Number(row.count) || 0), 0)
+  if (!total) {
+    return PLATFORM_RULES.map((rule) => ({ name: rule.name, value: 0 }))
+  }
+  return rows.map((row) => ({
+    name: row.name,
+    value: Math.round(((Number(row.count) || 0) / total) * 100)
+  }))
+}
+
 async function getParseCountsByOpenids(openids) {
   if (!openids.length) return {}
   const pool = getPool()
@@ -255,6 +318,8 @@ module.exports = {
   clearRecordsByOpenid,
   listRecordsForAdmin,
   getParseStats,
+  getParseTrendDays,
+  getPlatformDistribution,
   getParseCountsByOpenids,
   detectPlatform
 }
