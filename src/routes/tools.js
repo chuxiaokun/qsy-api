@@ -5,6 +5,7 @@ const express = require("express")
 const multer = require("multer")
 const { spawn } = require("child_process")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
+const { proxyMediaStream } = require("../videoProxy")
 
 const router = express.Router()
 
@@ -75,6 +76,61 @@ function clampInt(value, min, max, fallback) {
   if (!Number.isFinite(n)) return fallback
   return Math.max(min, Math.min(max, Math.round(n)))
 }
+
+function isPrivateIp(hostname) {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    const parts = hostname.split(".").map((part) => Number(part))
+    return (
+      parts[0] === 10 ||
+      parts[0] === 127 ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      parts[0] === 0
+    )
+  }
+  return false
+}
+
+function isSafePublicMediaUrl(raw) {
+  try {
+    const url = new URL(String(raw || "").trim())
+    if (!/^https?:$/i.test(url.protocol)) return false
+    const hostname = url.hostname.toLowerCase()
+    return (
+      hostname !== "localhost" &&
+      !hostname.endsWith(".localhost") &&
+      !hostname.endsWith(".local") &&
+      !isPrivateIp(hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * GET /api/tools/media-download?url=<encoded media url>
+ * Streams third-party media through this API domain, so wx.downloadFile only
+ * needs to whitelist the API domain instead of every redirected CDN host.
+ */
+async function handleMediaDownload(req, res) {
+  const mediaUrl = String((req.query && req.query.url) || "").trim()
+  if (!isSafePublicMediaUrl(mediaUrl)) {
+    return res.status(400).json({ code: 400, msg: "invalid media url" })
+  }
+
+  try {
+    await proxyMediaStream(mediaUrl, res)
+  } catch (err) {
+    console.error("[tools/media-download]", err)
+    if (!res.headersSent) {
+      res.status(500).json({ code: 500, msg: "media proxy failed" })
+    }
+  }
+}
+
+router.get("/media-download", handleMediaDownload)
+router.get("/video-download", handleMediaDownload)
 
 /**
  * POST /api/tools/video-to-gif
