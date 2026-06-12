@@ -2,6 +2,31 @@ const { Readable } = require("node:stream")
 
 const DEFAULT_REFERER = "https://www.douyin.com/"
 const MAX_REDIRECTS = 5
+const HTTPS_PREFERRED_HOSTS = [
+  /(?:^|\.)xhscdn\.com$/i,
+  /(?:^|\.)douyinvod\.com$/i,
+  /(?:^|\.)douyinpic\.com$/i,
+  /(?:^|\.)iesdouyin\.com$/i,
+  /(?:^|\.)kwimgs\.com$/i,
+  /(?:^|\.)hdslb\.com$/i
+]
+
+function normalizeMediaUrl(raw) {
+  const trimmed = String(raw || "").trim()
+  if (!trimmed) return trimmed
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== "http:") return trimmed
+    const host = parsed.hostname.toLowerCase()
+    if (HTTPS_PREFERRED_HOSTS.some((re) => re.test(host))) {
+      parsed.protocol = "https:"
+      return parsed.toString()
+    }
+  } catch {
+    return trimmed
+  }
+  return trimmed
+}
 
 function refererForUrl(url) {
   try {
@@ -73,7 +98,7 @@ async function fetchVideoWithRedirects(url, headers) {
  * 服务端拉取第三方视频并转发，避免浏览器 Referer/CORS 导致 <video> 无法播放
  */
 async function proxyMediaStream(mediaUrl, res) {
-  const url = String(mediaUrl || "").trim()
+  const url = normalizeMediaUrl(mediaUrl)
   if (!/^https?:\/\//i.test(url)) {
     res.status(400).json({ code: 400, msg: "无效的视频地址" })
     return
@@ -113,6 +138,7 @@ async function proxyMediaStream(mediaUrl, res) {
 }
 
 module.exports = {
+  normalizeMediaUrl,
   proxyMediaStream,
   proxyVideoStream: proxyMediaStream
 }

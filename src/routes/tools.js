@@ -5,7 +5,7 @@ const express = require("express")
 const multer = require("multer")
 const { spawn } = require("child_process")
 const { getPublicBaseUrl } = require("../publicBaseUrl")
-const { proxyMediaStream } = require("../videoProxy")
+const { normalizeMediaUrl, proxyMediaStream } = require("../videoProxy")
 
 const router = express.Router()
 
@@ -108,14 +108,38 @@ function isSafePublicMediaUrl(raw) {
   }
 }
 
+function decodeMediaUrlParam(raw) {
+  const trimmed = String(raw || "").trim()
+  if (!trimmed) return ""
+  try {
+    const standard = trimmed.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = standard + "=".repeat((4 - (standard.length % 4)) % 4)
+    return Buffer.from(padded, "base64").toString("utf8").trim()
+  } catch {
+    return ""
+  }
+}
+
+function resolveMediaUrlFromQuery(query) {
+  const encoded = decodeMediaUrlParam(query && query.u)
+  if (encoded && isSafePublicMediaUrl(encoded)) {
+    return normalizeMediaUrl(encoded)
+  }
+  const plain = String((query && query.url) || "").trim()
+  if (plain && isSafePublicMediaUrl(plain)) {
+    return normalizeMediaUrl(plain)
+  }
+  return ""
+}
+
 /**
- * GET /api/tools/media-download?url=<encoded media url>
- * Streams third-party media through this API domain, so wx.downloadFile only
- * needs to whitelist the API domain instead of every redirected CDN host.
+ * GET /api/tools/media-download?u=<base64url(original media url)>
+ * Streams third-party media through this API domain. The client must pass the
+ * source URL as base64url in `u` so wx.downloadFile only hits the API host.
  */
 async function handleMediaDownload(req, res) {
-  const mediaUrl = String((req.query && req.query.url) || "").trim()
-  if (!isSafePublicMediaUrl(mediaUrl)) {
+  const mediaUrl = resolveMediaUrlFromQuery(req.query)
+  if (!mediaUrl) {
     return res.status(400).json({ code: 400, msg: "invalid media url" })
   }
 
